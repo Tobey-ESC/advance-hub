@@ -1,0 +1,56 @@
+/* ============================================================================
+   DESIGN TOKENS + BASE — functional brutalism / editorial documentation
+   Palette: off-white #F7F7F5 · light grey #E7E7E4 · charcoal #222222 · white
+   ========================================================================== */
+:root {
+  --bg: #F7F7F5;          /* chrome: header, sidebar, toc */
+  --paper: #FFFFFF;       /* reading surface */
+  --line: #E7E7E4;        /* 1px hairlines + chip fill */
+  --line-strong: #CFCFCA; /* inputs, buttons */
+  --ink: #222222;
+  --ink-soft: #444441;
+  --ink-mute: #6B6B64;
+
+  --st-investigating: #A8650A;
+  --st-resolved: #2E7D4F;
+  --st-workaround: #3B5E8C;
+  --st-escalated: #B3382C;
+  --st-closed: #8A8A82;
+
+  --r: 5px;
+  --header-h: 56px;
+  --sidebar-w: 276px;
+  --toc-w: 252px;
+
+  --font: "Inter", "Geist", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 15px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+body.is-locked { overflow: hidden; }
+
+h1, h2, h3, h4, p, ul, ol, dl, dd { margin: 0; }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
+button:disabled { cursor: not-allowed; }
+ul, ol { padding: 0; list-style: none; }
+code, pre { font-family: var(--mono); }
+.icon { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+::selection { background: var(--ink); color: var(--paper); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: 12px; top: -48px; z-index: 100; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: var(--r); }
+.skip-link:focus { top: 10px; }
+
+.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-mute); }
+mark { background: #FFE98A; color: var(--ink); padding: 0 1px; border-radius: 2px; }

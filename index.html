@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Advanced Hub | Internal support knowledge tracker</title>
+  <meta name="description" content="Searchable library of advanced support conversations: Inbox Advanced and Automation Advanced.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23222'/%3E%3Cpath d='M9 23 16 8l7 15M12 18h8' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='square'/%3E%3C/svg%3E">
+
+  <!-- Google Fonts (falls back to system fonts when offline) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <a class="skip-link" href="#view">Skip to content</a>
+
+  <!-- ================= HEADER ================= -->
+  <header class="topbar">
+    <button class="icon-btn menu-toggle" id="menuToggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span data-icon="menu"></span></button>
+    <a class="brand" href="#/dashboard" aria-label="Advanced Hub, go to dashboard"><span class="brand__mark" aria-hidden="true">eh</span><strong>adv convos</strong><span class="brand__tag">Documentation</span></a>
+    <label class="gsearch">
+      <span class="sr-only">Search documented cases</span>
+      <span data-icon="search"></span>
+      <input id="globalSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search documented cases&hellip;">
+      <kbd aria-hidden="true">/</kbd>
+    </label>
+    <nav class="topnav" id="topnav" aria-label="Sections">
+      <a data-route="dashboard" href="#/dashboard">Dashboard</a>
+      <a data-route="library" href="#/all">Library</a>
+    </nav>
+  </header>
+
+  <div class="data-warnings" id="dataWarnings" hidden></div>
+
+  <div class="shell">
+    <!-- ================= SIDEBAR (rendered by app.js) ================= -->
+    <aside class="sidebar" id="sidebar" aria-label="Documentation navigation"></aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- ================= READING COLUMN ================= -->
+    <main id="view" tabindex="-1"></main>
+
+    <!-- ================= ON THIS PAGE (reader only) ================= -->
+    <aside class="toc" id="toc" aria-label="On this page"></aside>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+
+  <noscript><p style="padding:24px;font-weight:700">Advanced Hub needs JavaScript enabled.</p></noscript>
+
+  <!-- Optional: Fuse.js for fuzzy search. If it fails to load, a built-in matcher takes over. -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+
+  <!-- App scripts: plain classic scripts, no modules, no fetch(). Order matters. -->
+  <script src="js/config.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/conversations.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

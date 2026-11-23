@@ -1,0 +1,28 @@
+/* ============================================================================
+   RESPONSIVE
+   ========================================================================== */
+@media (max-width: 1180px) {
+  body.is-doc .shell { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+  body.is-doc .toc { display: none; }
+}
+@media (max-width: 960px) {
+  .shell, body.is-doc .shell { grid-template-columns: minmax(0, 1fr); }
+  .menu-toggle { display: inline-grid; margin-left: -8px; }
+  .sidebar {
+    position: fixed; z-index: 36; top: var(--header-h); left: 0; bottom: 0; width: min(86vw, 320px); height: auto;
+    transform: translateX(-102%); transition: transform .2s ease; border-right: 1px solid var(--line-strong);
+  }
+  body.nav-open .sidebar { transform: none; }
+  #view { padding: 28px 20px 72px; }
+}
+@media (max-width: 720px) {
+  .topbar { gap: 10px; padding: 0 14px; }
+  .brand__tag, .topnav, kbd { display: none; }
+  .gsearch { margin-left: 0; max-width: none; }
+  .doc h1 { font-size: 28px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .topics-grid { grid-template-columns: 1fr; }
+  .entry { grid-template-columns: 1fr; }
+  .quick { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
