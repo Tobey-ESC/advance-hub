@@ -139,6 +139,36 @@
       (list.length > 8 ? "<li>&hellip; and " + (list.length - 8) + " more (see browser console)</li>" : "") + "</ul></div>";
   }
 
+    /* Auto-highlighter: the app decides what matters. Rule-based, runs on escaped text,
+     skips code and links, and caps highlights per block so only key points stand out. */
+  var HL_RULES = [
+    { cls: "risk",  src: "(?:this is )?a bug(?: on our side)?|bug on our side|known (?:issue|bug|limitation)|not a setting(?: or user error)?|by design|not supported|isn&#39;t supported|data loss|regression" },
+    { cls: "fix",   src: "work-?around|resolved|fix(?:ed|es)?|solution" },
+    { cls: "cause", src: "root cause|caused by|the cause|reproduced|confirmed" },
+    { cls: "ui",    src: "(?<![\\w;])&#39;(?:(?!&#39;).){3,80}?&#39;(?![\\w])|(?:Settings|Workflows?|Inbox|Messenger|Fin|Workspace|Apps?|Teammates?|Help Center|Outbound|Reports?|Knowledge|Channels?|Admin)(?: &gt; [A-Za-z][A-Za-z ]{1,24})+" }
+  ];
+  var HL_RE = null, HL_LEFT = 0;
+  try {
+    HL_RE = new RegExp(HL_RULES.map(function (r) { return "(\\b(?:" + r.src + ")\\b|" + (r.cls === "ui" ? r.src : "(?!)") + ")"; }).join("|"), "gi");
+  } catch (e) { HL_RE = null; }
+  function highlight(html) {
+    if (!HL_RE || C.autoHighlight === false) return html;
+    var inLink = 0;
+    return html.split(/(<[^>]+>)/).map(function (part) {
+      if (part.charAt(0) === "<") { if (/^<a[\s>]/.test(part)) inLink++; else if (part === "</a>") inLink--; return part; }
+      if (inLink > 0 || HL_LEFT <= 0) return part;
+      return part.replace(HL_RE, function (m) {
+        if (HL_LEFT <= 0) return m;
+        var g = Array.prototype.slice.call(arguments, 1, 1 + HL_RULES.length), k = -1;
+        for (var i = 0; i < g.length; i++) if (g[i] !== undefined) { k = i; break; }
+        if (k < 0) return m;
+        HL_LEFT--;
+        return '<span class="hl hl--' + HL_RULES[k].cls + '">' + m + "</span>";
+      });
+    }).join("");
+  }
+
+
   /* ======================================================================
      Rich text for technical notes (safe: everything is escaped first)
      ==================================================================== */
@@ -149,7 +179,8 @@
       h = h.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
       h = h.replace(/(^|[\s(])\*([^*\s][^*\n]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
       h = h.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)&#;])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-      return h;
+            return highlight(h);
+
     }).join("");
   }
   var RE_UL = /^\s*[-*\u2022]\s+/, RE_OL = /^\s*\d+[.)]\s+/, RE_H = /^##\s+/, RE_Q = /^>\s?/;
@@ -180,6 +211,8 @@
   function rich(text) {
     text = String(text || "").replace(/\r\n?/g, "\n").trim();
     if (!text) return "";
+    HL_LEFT = 6; // max highlights per block of text
+
     var out = [], re = /```[^\n]*\n([\s\S]*?)```/g, last = 0, m;
     while ((m = re.exec(text))) {
       out.push(blocks(text.slice(last, m.index)));

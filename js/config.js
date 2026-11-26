@@ -3,6 +3,8 @@ window.AH = window.AH || {};
 AH.CONFIG = {
   appName: "Advanced Hub",
   recentCount: 5,
+autoHighlight: true, // set false to turn off the automatic text highlighter
+
 
   categories: {
     inbox: {
