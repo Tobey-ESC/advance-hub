@@ -139,48 +139,81 @@
       (list.length > 8 ? "<li>&hellip; and " + (list.length - 8) + " more (see browser console)</li>" : "") + "</ul></div>";
   }
 
-    /* Auto-highlighter: the app decides what matters. Rule-based, runs on escaped text,
-     skips code and links, and caps highlights per block so only key points stand out. */
-  var HL_RULES = [
-    { cls: "risk",  src: "(?:this is )?a bug(?: on our side)?|bug on our side|known (?:issue|bug|limitation)|not a setting(?: or user error)?|by design|not supported|isn&#39;t supported|data loss|regression" },
-    { cls: "fix",   src: "work-?around|resolved|fix(?:ed|es)?|solution" },
-    { cls: "cause", src: "root cause|caused by|the cause|reproduced|confirmed" },
-    { cls: "ui",    src: "(?<![\\w;])&#39;(?:(?!&#39;).){3,80}?&#39;(?![\\w])|(?:Settings|Workflows?|Inbox|Messenger|Fin|Workspace|Apps?|Teammates?|Help Center|Outbound|Reports?|Knowledge|Channels?|Admin)(?: &gt; [A-Za-z][A-Za-z ]{1,24})+" }
-  ];
-  var HL_RE = null, HL_LEFT = 0;
-  try {
-    HL_RE = new RegExp(HL_RULES.map(function (r) { return "(\\b(?:" + r.src + ")\\b|" + (r.cls === "ui" ? r.src : "(?!)") + ")"; }).join("|"), "gi");
-  } catch (e) { HL_RE = null; }
-  function highlight(html) {
-    if (!HL_RE || C.autoHighlight === false) return html;
-    var inLink = 0;
-    return html.split(/(<[^>]+>)/).map(function (part) {
-      if (part.charAt(0) === "<") { if (/^<a[\s>]/.test(part)) inLink++; else if (part === "</a>") inLink--; return part; }
-      if (inLink > 0 || HL_LEFT <= 0) return part;
-      return part.replace(HL_RE, function (m) {
-        if (HL_LEFT <= 0) return m;
-        var g = Array.prototype.slice.call(arguments, 1, 1 + HL_RULES.length), k = -1;
-        for (var i = 0; i < g.length; i++) if (g[i] !== undefined) { k = i; break; }
-        if (k < 0) return m;
-        HL_LEFT--;
-        return '<span class="hl hl--' + HL_RULES[k].cls + '">' + m + "</span>";
-      });
-    }).join("");
-  }
-
-
   /* ======================================================================
      Rich text for technical notes (safe: everything is escaped first)
      ==================================================================== */
+  /* Context-aware highlighter. For each section of a case it scores every sentence using
+     (1) what that section is for, (2) words shared with the case title/tags/topic, and
+     (3) specificity (IDs, quoted UI names, code), then marks the best one or two. */
+  var HL_ROLE = {
+    summary:       { cls: "problem",  label: "The problem",  strong: /\b(?:unable|cannot|can't|can&#39;t|didn't|doesn't|won't|not (?:working|showing|firing|triggering|saving)|missing|omits?|fails?|failed|error|stuck|expected|reported|wants?|asked)\b/gi,
+                     weak: /\b(?:escalat\w*|workaround|resolved|fixed|logged|confirmed)\b/gi, first: 1 },
+    investigation: { cls: "evidence", label: "Key evidence", strong: /\b(?:reproduc\w*|ruled out|confirmed|verified|found|identified|compared|noticed)\b/gi,
+                     weak: /\b(?:tested|checked|reviewed|logs?|impersonat\w*|headers?|history|run|steps?|settings?)\b/gi, first: 0 },
+    findings:      { cls: "finding",  label: "Key finding",  strong: /\b(?:root cause|caused by|because|due to|the cause|bug|by design|not a setting|limitation|only when|race condition|regression)\b/gi,
+                     weak: /\b(?:expected|means|this is|since|evaluat\w*|instead|rather than)\b/gi, first: 0 },
+    resolution:    { cls: "fix",      label: "The fix",      strong: /\b(?:work-?around|solution|fix(?:ed)?|escalat\w*|logged|recommend\w*|advis\w*|should)\b/gi,
+                     weak: /\b(?:enable|disable|set|use|click|turn|switch|add|remove|change|ask|github|engineering|reach out|keep|follow)\w*\b/gi, first: 0 }
+  };
+  var HL_STOP = /^(?:that|this|with|from|have|were|when|then|they|their|there|what|which|into|would|could|about|after|before|also|only|been|your|will|than|them|just|does|doesn|didn)$/;
+  var HL_MARK = { problem: "a", evidence: "b", finding: "c", fix: "d" };
+  var HL_BACK = { a: "problem", b: "evidence", c: "finding", d: "fix" };
+  function hlContext(rec) {
+    var src = [rec.title, rec.topic, (rec.tags || []).join(" ")].join(" ").toLowerCase().replace(/&/g, " ");
+    var set = {};
+    (src.match(/[a-z][a-z0-9-]{3,}/g) || []).forEach(function (w) { if (!HL_STOP.test(w)) set[w] = 1; });
+    return set;
+  }
+  function hlCount(text, re) { var m = text.match(re); return m ? m.length : 0; }
+  function hlScore(sent, role, ctx, idx) {
+    var plain = sent.replace(/`/g, ""), low = plain.toLowerCase(), sc = 0;
+    if (plain.length < 35 || /:$/.test(plain)) return -9;
+    sc += Math.min(hlCount(low, role.strong), 2) * 3 + Math.min(hlCount(low, role.weak), 2);
+    if (idx === 0 && role.first) sc += role.first;
+    var seen = {}, ov = 0;
+    (low.match(/[a-z][a-z0-9-]{3,}/g) || []).forEach(function (w) { if (ctx[w] && !seen[w]) { seen[w] = 1; ov++; } });
+    sc += Math.min(ov, 3);
+    if (/`[^`]+`|'[^'\n]{3,}'|#\d{3,}|\b[A-Z]{2,}-\d+\b/.test(sent)) sc += 1;
+    if (plain.length > 260) sc -= 1;
+    return sc;
+  }
+  /** Inserts invisible markers around the best sentence(s); rich() turns them into spans. */
+  function markBest(chunks, secKey, rec) {
+    var role = HL_ROLE[secKey]; if (!role || C.autoHighlight === false) return chunks;
+    var ctx = hlContext(rec || {}), cands = [], n = 0, ci;
+    var lines = chunks.map(function (c) { return c.split("\n"); });
+    for (ci = 0; ci < lines.length; ci++) {
+      lines[ci].forEach(function (ln, li) {
+        var pre = /^\s*(?:[-*\u2022]|\d+[.)]|##|>)?\s*/.exec(ln)[0].length, body = ln.slice(pre), m, re = /[^.!?]+(?:[.!?]+(?=\s|$)|$)/g;
+        while ((m = re.exec(body))) {
+          var t = m[0], lead = t.length - t.replace(/^\s+/, "").length, txt = t.trim();
+          if (!txt) continue;
+          cands.push({ ci: ci, li: li, s: pre + m.index + lead, e: pre + m.index + lead + txt.length, sc: hlScore(txt, role, ctx, n) });
+          n++;
+        }
+      });
+    }
+    var picks = cands.filter(function (c) { return c.sc >= 2; }).sort(function (a, b) { return b.sc - a.sc; });
+    picks = picks.slice(0, n >= 6 && picks.length > 1 && picks[1].sc >= 5 ? 2 : 1);
+    picks.sort(function (a, b) { return a.ci - b.ci || a.li - b.li || b.s - a.s; }); // later text first so offsets stay valid
+    var mk = String.fromCharCode(0xE000) + HL_MARK[role.cls], end = String.fromCharCode(0xE001);
+    picks.forEach(function (p) { var ln = lines[p.ci][p.li]; lines[p.ci][p.li] = ln.slice(0, p.s) + mk + ln.slice(p.s, p.e) + end + ln.slice(p.e); });
+    return lines.map(function (l) { return l.join("\n"); });
+  }
+  function applyMarks(html) {
+    return html.replace(/\uE000([a-d])/g, function (m, c) {
+      var cls = HL_BACK[c];
+      return '<span class="hl hl--' + cls + '" title="Auto-highlight: ' + esc(HL_ROLE[{ problem: "summary", evidence: "investigation", finding: "findings", fix: "resolution" }[cls]].label) + '">';
+    }).replace(/\uE001/g, "</span>");
+  }
   function inline(s) {
     return s.split(/(`[^`\n]+`)/).map(function (p, i) {
       if (i % 2) return "<code>" + esc(p.slice(1, -1)) + "</code>";
       var h = esc(p);
       h = h.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
       h = h.replace(/(^|[\s(])\*([^*\s][^*\n]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
-      h = h.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)&#;])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-            return highlight(h);
-
+      h = h.replace(/(https?:\/\/[^\s<\uE000\uE001]+[^\s<\uE000\uE001.,;:!?)&#;])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+      return h;
     }).join("");
   }
   var RE_UL = /^\s*[-*\u2022]\s+/, RE_OL = /^\s*\d+[.)]\s+/, RE_H = /^##\s+/, RE_Q = /^>\s?/;
@@ -208,21 +241,19 @@
     }
     return html.join("");
   }
-  function rich(text) {
+  function rich(text, secKey, rec) {
     text = String(text || "").replace(/\r\n?/g, "\n").trim();
     if (!text) return "";
-    HL_LEFT = 6; // max highlights per block of text
-
-    var out = [], re = /```[^\n]*\n([\s\S]*?)```/g, last = 0, m;
-    while ((m = re.exec(text))) {
-      out.push(blocks(text.slice(last, m.index)));
-      out.push("<pre><code>" + esc(m[1].replace(/\n$/, "")) + "</code></pre>");
-      last = re.lastIndex;
+    var codes = [], texts = [], re = /```[^\n]*\n([\s\S]*?)```/g, last = 0, m, out = [], i;
+    while ((m = re.exec(text))) { texts.push(text.slice(last, m.index)); codes.push(m[1].replace(/\n$/, "")); last = re.lastIndex; }
+    texts.push(text.slice(last));
+    texts = markBest(texts, secKey, rec);
+    for (i = 0; i < texts.length; i++) {
+      out.push(blocks(texts[i]));
+      if (i < codes.length) out.push("<pre><code>" + esc(codes[i]) + "</code></pre>");
     }
-    out.push(blocks(text.slice(last)));
-    return out.join("");
+    return applyMarks(out.join(""));
   }
-
   /* ======================================================================
      Reusable fragments
      ==================================================================== */
@@ -271,6 +302,8 @@
       .sort(function (a, b) { return b.score - a.score || AH.Filters.compareDate(b.r, a.r); })
       .slice(0, max).map(function (x) { return x.r; });
   }
+
+  function metaParts(r) { return [r.topic, statusBadge(r.status), esc(fmtDate(r.dateAdded))]; }
 
   /** One row of the documentation index. Whole row opens the full page; tags and quick view sit above the link. */
   function entryHtml(r, viewKey, query, showTags) {
@@ -600,7 +633,7 @@
       '<span class="idpill">' + esc(rec.id) + "</span>" +
       "<h1>" + esc(rec.title) + "</h1>" + metaLine(rec) + tagsRow(rec) + '<hr class="doc-rule">' +
       secs.map(function (s, i) {
-        return '<section class="dsec" id="sec-' + s.k + '" data-sec><h2><span class="num">' + pad2(i + 1) + "</span> / " + esc(s.t) + '</h2><div class="prose">' + rich(s.v) + "</div></section>";
+        return '<section class="dsec" id="sec-' + s.k + '" data-sec><h2><span class="num">' + pad2(i + 1) + "</span> / " + esc(s.t) + '</h2><div class="prose">' + rich(s.v, s.k, rec) + "</div></section>";
       }).join("") +
       (secs.length ? "" : '<section class="dsec"><p class="lead">No notes have been written for this case yet.</p></section>') +
       (related.length ? '<section class="dsec" id="sec-related" data-sec><h2><span class="num">' + pad2(secs.length + 1) + '</span> / Related cases</h2><ul class="related">' +
@@ -697,7 +730,7 @@
         '<button type="button" class="icon-btn" data-action="close-modal" id="modalClose" aria-label="Close preview" title="Close (Esc)">' + icon("x") + "</button>" +
       "</div></div>" +
       '<div class="modal__body" id="modalBody"><h2 class="modal__title" id="modalTitle">' + esc(rec.title) + "</h2>" + metaLine(rec) + tagsRow(rec) +
-      secs.map(function (s) { return '<section class="dsec"><h2>' + esc(s.t) + '</h2><div class="prose">' + rich(s.v) + "</div></section>"; }).join("") +
+      secs.map(function (s) { return '<section class="dsec"><h2>' + esc(s.t) + '</h2><div class="prose">' + rich(s.v, s.k, rec) + "</div></section>"; }).join("") +
       (secs.length ? "" : '<p class="lead" style="margin-top:24px">No notes have been written for this case yet.</p>') +
       '<div class="modal__cta"><span>' + (rec.intercomUrl ? "Need the original thread?" : "No Intercom link recorded.") + "</span>" +
         (rec.intercomUrl ? '<a class="btn btn--sm" href="' + esc(rec.intercomUrl) + '" target="_blank" rel="noopener noreferrer">' + icon("external-link") + "Open in Intercom</a>" : "") + "</div>" +
@@ -912,7 +945,7 @@
     if (value.trim()) AH.Nav.go("all");
   }
 
-    /** Console helper: run AH.perf() then scroll/navigate for 15s to log long tasks and slow frames. */
+  /** Console helper: run AH.perf() then scroll/navigate for 15s to log long tasks and slow frames. */
   AH.perf = function () {
     var log = function (k, v) { console.log("[perf] " + k, v); };
     try {
@@ -925,7 +958,6 @@
     })(last);
     log("running for 15s: scroll and navigate now", "");
   };
-
 
   /* ======================================================================
      Boot

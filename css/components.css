@@ -262,9 +262,9 @@ a.stat:hover .stat__l { color: var(--line); }
 .footer-note { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--ink-mute); }
 .footer-note code { font-size: 12px; }
 
-/* Auto-highlights (see HL_RULES in js/app.js). Translucent fills keep body text readable. */
-.hl { color: inherit; padding: 0 .18em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.hl--risk  { background: rgba(255, 99, 88, .22); }
-.hl--fix   { background: rgba(52, 199, 120, .26); }
-.hl--cause { background: rgba(70, 140, 255, .20); }
-.hl--ui    { background: rgba(255, 205, 40, .38); }
+/* Auto-highlights (context-aware, see markBest in js/app.js). Translucent fills keep text readable. */
+.hl { color: inherit; padding: .05em .2em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.hl--problem  { background: rgba(255, 99, 88, .20); }
+.hl--evidence { background: rgba(70, 140, 255, .18); }
+.hl--finding  { background: rgba(255, 205, 40, .38); }
+.hl--fix      { background: rgba(52, 199, 120, .24); }
